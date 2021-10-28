@@ -12,7 +12,7 @@ This cloudformation template automatically creates a slightly modified/simplifie
 
 The architecture...
 
-<img src="https://github.com/whittenburg/AWS-TGW-Lab/blob/main/images/AWS-TGW-Lab-Diagram.png">
+<img src="https://github.com/zscaler-bd-sa/AWS/blob/main/Zscaler/AWS-TGW-Lab/images/AWS-TGW-Lab-Diagram.png">
 
 ## Running the cloudformation template
 

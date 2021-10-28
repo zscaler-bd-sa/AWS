@@ -1,0 +1,530 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: This template creates a TGW lab environment with VMs.
+
+  This is a modified/simplified version of the template which can be found at
+  https://aws.amazon.com/blogs/networking-and-content-delivery/creating-a-single-internet-exit-point-from-multiple-vpcs-using-aws-transit-gateway/
+
+
+Parameters:
+
+  MyIP:
+    Description: Change to your source IP to access Bastion
+    Type: String
+    Default: '165.225.60.63/32'
+
+  MyKeyPair:
+    Description: Change to your keypair to use for EC2 instances
+    Type: String
+    Default: 'AWS_Keypair_Ohio'
+
+
+Resources:
+
+# egress vpc and subnet configuration
+
+  EgressVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 192.168.0.0/16
+      Tags:
+        - Key: Name
+          Value: Egress-VPC
+
+  EgressVpcPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'EgressVPC'
+      CidrBlock: 192.168.1.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: Egress-Public
+
+  EgressVpcPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'EgressVPC'
+      CidrBlock: 192.168.3.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: Egress-Private
+
+# igw and nat gw configuration, and eip assignment
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: IGW
+  AttachIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref 'EgressVPC'
+      InternetGatewayId: !Ref 'InternetGateway'
+  IPAddress:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachIGW
+    Properties:
+      Domain: vpc
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt IPAddress.AllocationId
+      SubnetId: !Ref EgressVpcPublicSubnet
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: NATGW
+
+# egress vpc route table configuration
+
+  EgressPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'EgressVPC'
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: Egress-Public-RT
+  EgressPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'EgressVPC'
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: Egress-Private-RT
+
+  EgressPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachIGW
+    Properties:
+      RouteTableId: !Ref 'EgressPublicRouteTable'
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref 'InternetGateway'
+  EgressPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'EgressVpcPublicSubnet'
+      RouteTableId: !Ref 'EgressPublicRouteTable'
+
+  EgressPrivateRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachIGW
+    Properties:
+      RouteTableId: !Ref 'EgressPrivateRouteTable'
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref 'NATGateway'
+  EgressPrivateRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'EgressVpcPrivateSubnet'
+      RouteTableId: !Ref 'EgressPrivateRouteTable'
+
+# app vpc, subnet, and route table configuration
+
+  App1VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: App1-VPC
+  App1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'App1VPC'
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: App1-Private
+  App1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'App1VPC'
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: App1-VPC-RT
+  App1SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'App1Subnet'
+      RouteTableId: !Ref 'App1RouteTable'
+
+  App2VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: App2-VPC
+  App2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'App2VPC'
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: App2-Private
+  App2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'App2VPC'
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackId'
+        - Key: Name
+          Value: App2-VPC-RT
+  App2SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'App2Subnet'
+      RouteTableId: !Ref 'App2RouteTable'
+
+
+# transit gateway configuration and subnet attachment
+
+  TransitGateway:
+    Type: "AWS::EC2::TransitGateway"
+    Properties:
+      AutoAcceptSharedAttachments: enable
+      DefaultRouteTableAssociation: "disable"
+      DefaultRouteTablePropagation: "disable"
+      Description: A transit gateway to support a single egress subnet
+      Tags:
+        - Key: Name
+          Value: TGW-Internet
+
+  EgressVpcAttachment:
+    Type: "AWS::EC2::TransitGatewayAttachment"
+    Properties:
+      SubnetIds:
+        - !Ref 'EgressVpcPrivateSubnet'
+      Tags:
+        - Key: Name
+          Value: Egress-Attachment
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref EgressVPC
+  App1Attachment:
+    Type: "AWS::EC2::TransitGatewayAttachment"
+    Properties:
+      SubnetIds:
+        - !Ref 'App1Subnet'
+      Tags:
+        - Key: Name
+          Value: App1-Attachment
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref App1VPC
+  App2Attachment:
+    Type: "AWS::EC2::TransitGatewayAttachment"
+    Properties:
+      SubnetIds:
+        - !Ref 'App2Subnet'
+      Tags:
+        - Key: Name
+          Value: App2-Attachment
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref App2VPC
+
+# transit gateway route table configuration
+
+  EgressTransitGatewayRouteTable:
+    Type: "AWS::EC2::TransitGatewayRouteTable"
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Egress-RouteTable
+      TransitGatewayId: !Ref TransitGateway
+
+  AppTransitGatewayRouteTable:
+    Type: "AWS::EC2::TransitGatewayRouteTable"
+    Properties:
+      Tags:
+        - Key: Name
+          Value: App-RouteTable
+      TransitGatewayId: !Ref TransitGateway
+
+
+# add a default route and black hole to the app route table
+
+  AppDefaultTGWRoute:
+    Type: "AWS::EC2::TransitGatewayRoute"
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      TransitGatewayAttachmentId: !Ref EgressVpcAttachment
+      TransitGatewayRouteTableId: !Ref AppTransitGatewayRouteTable
+
+  AppBlackhole10Route:
+    Type: "AWS::EC2::TransitGatewayRoute"
+    Properties:
+      Blackhole: Yes
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayRouteTableId: !Ref AppTransitGatewayRouteTable
+
+  AppBlackhole172Route:
+    Type: "AWS::EC2::TransitGatewayRoute"
+    Properties:
+      Blackhole: Yes
+      DestinationCidrBlock: 172.16.0.0/12
+      TransitGatewayRouteTableId: !Ref AppTransitGatewayRouteTable
+
+# Note: add this if you are only using the egress vpc as a route out
+# if testing with a bastion host this blocks the path back from the app VPCs
+
+#  AppBlackhole192Route:
+#    Type: "AWS::EC2::TransitGatewayRoute"
+#    Properties:
+#      Blackhole: Yes
+#      DestinationCidrBlock: 192.168.0.0/16
+#      TransitGatewayRouteTableId: !Ref AppTransitGatewayRouteTable
+
+  App1Route:
+    Type: "AWS::EC2::TransitGatewayRoute"
+    Properties:
+      DestinationCidrBlock: 10.0.0.0/16
+      TransitGatewayAttachmentId: !Ref App1Attachment
+      TransitGatewayRouteTableId: !Ref EgressTransitGatewayRouteTable
+
+  App2Route:
+    Type: "AWS::EC2::TransitGatewayRoute"
+    Properties:
+      DestinationCidrBlock: 10.1.0.0/16
+      TransitGatewayAttachmentId: !Ref App2Attachment
+      TransitGatewayRouteTableId: !Ref EgressTransitGatewayRouteTable
+
+# transit gateway associations
+
+  EgressVpcTgwAssociation:
+    Type: "AWS::EC2::TransitGatewayRouteTableAssociation"
+    Properties:
+      TransitGatewayAttachmentId: !Ref EgressVpcAttachment
+      TransitGatewayRouteTableId: !Ref EgressTransitGatewayRouteTable
+  App1VpcTgwAssociation:
+    Type: "AWS::EC2::TransitGatewayRouteTableAssociation"
+    Properties:
+      TransitGatewayAttachmentId: !Ref App1Attachment
+      TransitGatewayRouteTableId: !Ref AppTransitGatewayRouteTable
+  App2VpcTgwAssociation:
+    Type: "AWS::EC2::TransitGatewayRouteTableAssociation"
+    Properties:
+      TransitGatewayAttachmentId: !Ref App2Attachment
+      TransitGatewayRouteTableId: !Ref AppTransitGatewayRouteTable
+
+# update VPC route tables to point towards TGW for appropriate target CIDR ranges
+
+  UpdateApp1RouteTable:
+    Type: AWS::EC2::Route
+    DependsOn: App1Attachment
+    Properties:
+      RouteTableId: !Ref App1RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      TransitGatewayId: !Ref TransitGateway
+
+  UpdateApp2RouteTable:
+    Type: AWS::EC2::Route
+    DependsOn: App2Attachment
+    Properties:
+       RouteTableId: !Ref App2RouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       TransitGatewayId: !Ref TransitGateway
+
+# this adds 10.0.0.0/8 pointing to the transit gateway instead of two /16 subnets as shown in guide
+
+  UpdateEgressPublicRouteTable:
+    Type: AWS::EC2::Route
+    DependsOn: EgressVpcAttachment
+    Properties:
+       RouteTableId: !Ref EgressPublicRouteTable
+       DestinationCidrBlock: 10.0.0.0/8
+       TransitGatewayId: !Ref TransitGateway
+
+# add security groups to appropriate VPCs and launch EC2s
+
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows SSH Only from my IP
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref MyIP
+      Tags:
+        - Key: "Name"
+          Value: "BastionSG"
+      VpcId: !Ref EgressVPC
+
+  BastionEC2Instance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: ami-074cce78125f09d61
+      InstanceType: t2.large
+      KeyName: !Ref MyKeyPair
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: "BastionSecurityGroup"
+          SubnetId: !Ref EgressVpcPublicSubnet
+      Tags:
+         - Key: "Name"
+           Value: "Bastion"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Update prompt to reflect instance name
+          echo "PS1=\"[\\u@Bastion \\W]\\$ \"" >> /home/ec2-user/.bashrc
+
+  App1SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows SSH and ICMP from 10.0.0.0/8 and 192.168.0.0/16
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/8
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 192.168.0.0/16
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 10.0.0.0/8
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 192.168.0.0/16
+      Tags:
+        - Key: "Name"
+          Value: "App1-SG"
+      VpcId: !Ref App1VPC
+
+  App1EC2Instance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: ami-074cce78125f09d61
+      InstanceType: t2.large
+      KeyName: !Ref MyKeyPair
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: "App1SecurityGroup"
+          SubnetId: !Ref App1Subnet
+      Tags:
+         - Key: "Name"
+           Value: "App1"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Update prompt to reflect instance name
+          echo "PS1=\"[\\u@App1 \\W]\\$ \"" >> /home/ec2-user/.bashrc
+
+  App2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows SSH and ICMP from 10.0.0.0/8 and 192.168.0.0/16
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/8
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 192.168.0.0/16
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 10.0.0.0/8
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 192.168.0.0/16
+      Tags:
+        - Key: "Name"
+          Value: "App2-SG"
+      VpcId: !Ref App2VPC
+
+  App2EC2Instance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: ami-074cce78125f09d61
+      InstanceType: t2.large
+      KeyName: !Ref MyKeyPair
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: "App2SecurityGroup"
+          SubnetId: !Ref App2Subnet
+      Tags:
+         - Key: "Name"
+           Value: "App2"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Update prompt to reflect instance name
+          echo "PS1=\"[\\u@App2 \\W]\\$ \"" >> /home/ec2-user/.bashrc
+
+Outputs:
+
+  BastionIP:
+    Description: Bastion Public IP
+    Value: !GetAtt
+      - BastionEC2Instance
+      - PublicIp
+
+  App1IP:
+    Description: App1 Private IP
+    Value: !GetAtt
+      - App1EC2Instance
+      - PrivateIp
+
+  App2IP:
+    Description: App2 Private IP
+    Value: !GetAtt
+      - App2EC2Instance
+      - PrivateIp
+
+  ElasticIP:
+    Description: Management Elastic IP
+    Value: !Ref IPAddress

@@ -6,7 +6,7 @@ This is a modified/simplified version of the template which can be found at : ht
 
 File | Description
 ------------ | -------------
-AWS-TGW-Lab.yaml | Cloudformation template to create AWS TGW lab
+[**AWS-TGW-Lab.yaml**](https://github.com/zscaler-bd-sa/AWS/blob/main/Zscaler/AWS-TGW-Lab/AWS-TGW-Lab.yaml) | Cloudformation template to create AWS TGW lab
 
 This cloudformation template automatically creates a slightly modified/simplified version of what is described in the blog referenced in the template above, but can be tested using the steps in the blog.
 

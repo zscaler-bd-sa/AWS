@@ -6,9 +6,9 @@ Automated deployment options to install a ZPA App Connector in AWS.
 
 File | Description
 ------------ | -------------
-[**AppConnCFT.yaml**](https://github.com/whittenburg/App-Connector-AWS/blob/main/AppConnCFT.yaml) | CloudFormation Template to install App Connector in AWS via GUI
-[**AppConnCFT-CLI.yaml**](https://github.com/whittenburg/App-Connector-AWS/blob/main/AppConnCFT-CLI.yaml) | CloudFormation Template to install App Connector in AWS via CLI
-[**AppConnTF.tf**](https://github.com/whittenburg/App-Connector-AWS/blob/main/AppConnTF.tf) | Terraform script to install App Connector in AWS cia CLI
+[**AppConnCFT.yaml**](https://github.com/zscaler-bd-sa/AWS/blob/main/Zscaler/App-Connector-AWS/AppConnCFT.yaml) | CloudFormation Template to install App Connector in AWS via GUI
+[**AppConnCFT-CLI.yaml**](https://github.com/zscaler-bd-sa/AWS/blob/main/Zscaler/App-Connector-AWS/AppConnCFT-CLI.yaml) | CloudFormation Template to install App Connector in AWS via CLI
+[**AppConnTF.tf**](https://github.com/zscaler-bd-sa/AWS/blob/main/Zscaler/App-Connector-AWS/AppConnTF.tf) | Terraform script to install App Connector in AWS cia CLI
 
 ## Installing
 

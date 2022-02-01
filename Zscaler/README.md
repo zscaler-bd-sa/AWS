@@ -7,7 +7,7 @@ Zscaler-contributed code for AWS.
 Resource | Description
 ------------ | -------------
 [**AWS-TGW-Lab**](https://github.com/zscaler-bd-sa/AWS/tree/main/Zscaler/AWS-TGW-Lab) | AWS TGW Lab referenced in deployment guide
-[**App-Connector-AWS**](https://github.com/zscaler-bd-sa/AWS/tree/main/Zscaler/App-Connector-AWS) | ZIA App Connector AWS Deployment Automation
+[**App-Connector-AWS**](https://github.com/zscaler-bd-sa/AWS/tree/main/Zscaler/App-Connector-AWS) | ZPA App Connector AWS Deployment Automation
 
 ## Support and reporting issues
 

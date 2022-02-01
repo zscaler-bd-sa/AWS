@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: ZPA App Connector sample template
+
+  This template is designed to be used interactively within the AWS portal
+  using either Designer or 'Create stack'. It creates an external IP and a
+  unique Security Group to allow SSH access to the App Connector. It will
+  prompt for your external IP address to use to restrict SSH access. The
+  external IP associated is not elastic so it will change if the instance
+  is restarted.
+
+Metadata:
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Access Configuration"
+        Parameters:
+          - MyIp
+          - MyKeypair
+          - MyProvisioningKey
+      -
+        Label:
+          default: "EC2 Configuration"
+        Parameters:
+          - MyImageId
+          - MyInstanceType
+          - MySubnetId
+          - MyVpcId
+    ParameterLabels:
+      MyIp:
+        default: "IP Address"
+      MyKeypair:
+        default: "Keypair"
+      MyProvisioningKey:
+        default: "ProvisioningKey"
+      MyImageId:
+        default: "App Connector Image"
+      MyInstanceType:
+        default: "Instance Type"
+      MySubnetId:
+        default: "Subnet to Use"
+      MyVpcId:
+        default: "VPC to Use"
+
+Parameters:
+
+  MyIp:
+    Description: Your source IP for SSH access (EC2 external IP configured will display in Outputs section)
+    Type: String
+    Default: '12.34.56.78/32'
+    ConstraintDescription: Must be external source IP used for SSH (could use 'curl https://api.myip.com')!
+
+  MyKeypair:
+    Description: The existing Keypair to use to authenticate
+    Type: AWS::EC2::KeyPair::KeyName
+
+  MyProvisioningKey:
+    Description: The ZPA provisioning key to use
+    Type: String
+    ConstraintDescription: As copied from ZPA UI - do not add extra characters or double quotes!
+
+  MyImageId:
+    Description: The ZPA App Connector AMI ID for your region
+    Type: String
+    Default: 'ami-0402d690ea9b86696'
+    ConstraintDescription: Must be valid for your region!
+
+  MyInstanceType:
+    Description: The EC2 instance size to use as recommended on Zscaler Help page
+    Type: String
+    Default: m5a.xlarge
+    AllowedValues:
+      - m5a.xlarge
+      - t3a.xlarge
+
+  MySubnetId:
+    Description: The Subnet ID to install the App Connector in
+    Type: AWS::EC2::Subnet::Id
+    ConstraintDescription: Must be valid with the VPC selected.
+
+  MyVpcId:
+    Description: The VPC ID to create the Security Group in
+    Type: AWS::EC2::VPC::Id
+    ConstraintDescription: Must be valid with the subnet selected.
+
+Resources:
+
+  AppConnSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows SSH Only
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref MyIp
+      Tags:
+        - Key: "Name"
+          Value: "ZPA App Connector SG"
+      VpcId: !Ref MyVpcId
+
+  AppConnEC2Instance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: !Ref MyImageId
+      InstanceType: !Ref MyInstanceType
+      KeyName: !Ref MyKeypair
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+          - !Ref AppConnSecurityGroup
+          SubnetId: !Ref MySubnetId
+      Tags:
+         - Key: "Name"
+           Value: "ZPA App Connector"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          #Stop the App Connector service which was auto-started at boot time
+          systemctl stop zpa-connector
+          #Copy App Connector provisioning key from ZPA Admin Portal to a file
+          #The provisioning key must be within between double quotes
+          echo "${MyProvisioningKey}" > /opt/zscaler/var/provision_key
+          #Run a yum update to apply the latest patches
+          yum update -y
+          #Start the App Connector service to enroll it in the ZPA cloud
+          systemctl start zpa-connector
+          #Wait for the App Connector to download the latest build
+          sleep 60
+          #Stop and then start the App Connector to run the latest build
+          systemctl stop zpa-connector
+          systemctl start zpa-connector
+
+Outputs:
+
+  AppConnPublicIP:
+    Description: App Connector Public IP (non Elastic)
+    Value: !GetAtt
+      - AppConnEC2Instance
+      - PublicIp
+
+  AppConnPrivateIP:
+    Description: App Connector Private IP
+    Value: !GetAtt
+      - AppConnEC2Instance
+      - PrivateIp

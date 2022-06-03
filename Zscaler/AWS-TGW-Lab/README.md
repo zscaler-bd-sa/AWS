@@ -20,7 +20,7 @@ This cloudformation template can be used to create a [stack](https://docs.aws.am
 
 ## How I tested the deployed environment
 
-For testing, I followed the "Testing the deployment" section in the [AWS Blog](https://aws.amazon.com/blogs/networking-and-content-delivery/creating-a-single-internet-exit-point-from-multiple-vpcs-using-aws-transit-gateway/) (referenced in the original sample AWS template link above) and connected to the Bastion host via SSH, copied my Keypair to the Bastion host, and connected to the App instances to validate that they could fetch content from the Internet but could not connect to the other App/VPC. I did need to omit the blackhole route for 192.168.0.0/16 mentioned in the blog in order to route back to the Bastion host.
+For testing, I followed the "Testing the deployment" section in the [AWS Blog](https://aws.amazon.com/blogs/networking-and-content-delivery/creating-a-single-internet-exit-point-from-multiple-vpcs-using-aws-transit-gateway/) (referenced in the original sample AWS template link above) but connected to the Bastion host and then the App instances using [SSH agent forwarding](https://aws.amazon.com/blogs/security/securely-connect-to-linux-instances-running-in-a-private-amazon-vpc/) to validate that they could fetch content from the Internet but could not connect to the other App/VPC. I did need to omit the blackhole route for 192.168.0.0/16 mentioned in the blog in order to route back to the Bastion host.
 
 ## Support and reporting issues
 
